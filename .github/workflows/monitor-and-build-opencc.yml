@@ -16,18 +16,13 @@ on:
 jobs:
   check-release:
     runs-on: ubuntu-latest
-    
     if: ${{ github.event.inputs.version_type == 'release' }}
     steps:
     - name: Fetch OpenCC Releases
       id: fetch_release
       run: |
         latest_release=$(curl -s https://api.github.com/repos/BYVoid/OpenCC/releases/latest | jq -r .tag_name)
-        echo "::set-output name=latest_release::$latest_release"
-
-    - name: Set environment variable
-      if: ${{ github.event.inputs.version_type == 'release' }}
-      run: echo "LATEST_RELEASE=${{ steps.fetch_release.outputs.latest_release }}" >> $GITHUB_ENV
+        echo "LATEST_RELEASE=$latest_release" >> $GITHUB_ENV
 
   download-and-build:
     needs: check-release
@@ -37,7 +32,9 @@ jobs:
       uses: actions/checkout@v3
 
     - name: Clone OpenCC Code
+      shell: bash # 强制使用 Bash
       run: |
+        # 判断选择逻辑，使用 Bash 的条件语句
         if [ "${{ github.event.inputs.version_type }}" == "release" ]; then
           git clone --branch ${{ env.LATEST_RELEASE }} https://github.com/BYVoid/OpenCC.git opencc
         else
@@ -64,3 +61,4 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         files: opencc/build/**
+  
