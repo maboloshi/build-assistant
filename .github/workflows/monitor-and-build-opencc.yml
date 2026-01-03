@@ -1,0 +1,66 @@
+name: Monitor and Build OpenCC
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Daily check at midnight UTC.
+  workflow_dispatch:
+    inputs:
+      version_type:
+        description: "Select whether to build the latest release or latest code."
+        required: true
+        default: "release"
+        options:
+          - release
+          - latest
+
+jobs:
+  check-release:
+    runs-on: ubuntu-latest
+    
+    if: ${{ github.event.inputs.version_type == 'release' }}
+    steps:
+    - name: Fetch OpenCC Releases
+      id: fetch_release
+      run: |
+        latest_release=$(curl -s https://api.github.com/repos/BYVoid/OpenCC/releases/latest | jq -r .tag_name)
+        echo "::set-output name=latest_release::$latest_release"
+
+    - name: Set environment variable
+      if: ${{ github.event.inputs.version_type == 'release' }}
+      run: echo "LATEST_RELEASE=${{ steps.fetch_release.outputs.latest_release }}" >> $GITHUB_ENV
+
+  download-and-build:
+    needs: check-release
+    runs-on: windows-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Clone OpenCC Code
+      run: |
+        if [ "${{ github.event.inputs.version_type }}" == "release" ]; then
+          git clone --branch ${{ env.LATEST_RELEASE }} https://github.com/BYVoid/OpenCC.git opencc
+        else
+          git clone https://github.com/BYVoid/OpenCC.git opencc
+        fi
+
+    - name: Configure build
+      working-directory: ./opencc
+      run: cmake -S. -Bbuild -DCMAKE_INSTALL_PREFIX=.
+
+    - name: Build and Install
+      working-directory: ./opencc
+      run: cmake --build build --config Release --target install
+
+    - name: Archive build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: opencc-windows-binaries
+        path: opencc/build
+
+    - name: Create a Release
+      uses: softprops/action-gh-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        files: opencc/build/**
