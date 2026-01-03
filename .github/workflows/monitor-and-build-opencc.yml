@@ -45,23 +45,23 @@ jobs:
           git clone https://github.com/BYVoid/OpenCC.git opencc
         fi
 
-    - name: Configure build
-      working-directory: ./opencc
-      run: cmake -S. -Bbuild -DCMAKE_INSTALL_PREFIX=.
-
     - name: Build and Install
       working-directory: ./opencc
-      run: cmake --build build --config Release --target install
+      run: |
+        cmake -S. -Bbuild -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=install
+        cmake --build build --config Release
+        cmake --install build --prefix build/install
 
     - name: Archive build artifacts
       uses: actions/upload-artifact@v6
       with:
         name: opencc-windows-binaries
-        path: opencc/build
+        path: opencc/build/install
 
     - name: Create a Release
       uses: softprops/action-gh-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        files: opencc/build/**
+        tag_name: v1.0
+        files: opencc/build/install/**
