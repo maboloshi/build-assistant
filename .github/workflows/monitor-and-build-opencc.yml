@@ -1,8 +1,11 @@
-name: Monitor and Build OpenCC
+name: Monitor and build, package OpenCC
 
 on:
   schedule:
-    - cron: '0 0 * * *' # 每日 UTC 时间凌晨 0 点触发。
+    # 每月的 2 日 UTC 时间凌晨 1:37 触发
+    - cron: '37 1 2 * *'
+    # 每月的 17 日 UTC 时间下午 2:15 触发
+    - cron: '15 14 17 * *'
   workflow_dispatch:
     inputs:
       version_type:
@@ -14,9 +17,9 @@ on:
           - latest
 
 jobs:
-  check-release:
+  check_release:
     runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.version_type == 'release' }}
+    if: ${{ github.event.inputs.version_type == 'release' || github.event_name == 'schedule' }}
     outputs:
       latest_release: ${{ steps.fetch_release.outputs.latest_release }}
     steps:
@@ -27,13 +30,27 @@ jobs:
         echo "latest_release=$latest_release" >> $GITHUB_OUTPUT
 
   download-and-build:
-    needs: check-release
-    runs-on: windows-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+    needs: check_release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        build_type: [Release, Debug]
 
-    - name: Clone OpenCC Code
+    steps:
+    - name: Map OS Names
+      id: map_os
+      shell: bash
+      run: |
+        if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
+          echo "os_short=linux" >> $GITHUB_ENV
+        elif [ "${{ matrix.os }}" == "windows-latest" ]; then
+          echo "os_short=windows" >> $GITHUB_ENV
+        elif [ "${{ matrix.os }}" == "macos-latest" ]; then
+          echo "os_short=macos" >> $GITHUB_ENV
+        fi
+
+    - name: Clone OpenCC repository
       shell: bash
       run: |
         # 判断用户选择逻辑
@@ -45,18 +62,21 @@ jobs:
           git clone https://github.com/BYVoid/OpenCC.git opencc
         fi
 
-    - name: Build and Install
+    - name: Build, Install and Package
       working-directory: ./opencc
       run: |
-        cmake -S. -Bbuild -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=install
-        cmake --build build --config Release
+        cmake -S . -B build \
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+          -DCMAKE_INSTALL_PREFIX=install
+        cmake --build build --config ${{ matrix.build_type }}
         cmake --install build --prefix build/install
+        cpack --config build/CPackConfig.cmake -G ZIP
 
-    - name: Archive build artifacts
+    - name: Upload Artifact
       uses: actions/upload-artifact@v6
       with:
-        name: opencc-windows-binaries
-        path: opencc/build/install
+        name: opencc-${{ env.os_short }}-${{ matrix.build_type }}
+        path: opencc/build/*.zip
 
     - name: Create a Release
       uses: softprops/action-gh-release@v1
@@ -64,4 +84,4 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         tag_name: v1.0
-        files: opencc/build/install/**
+        files: opencc/build/*.zip
