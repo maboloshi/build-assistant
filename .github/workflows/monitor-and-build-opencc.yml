@@ -35,7 +35,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        build_type: [Release, Debug]
+        build_type: [Release]
 
     steps:
     - name: Map OS Names
@@ -64,6 +64,7 @@ jobs:
 
     - name: Build, Install and Package
       working-directory: ./opencc
+      shell: bash
       run: |
         cmake -S . -B build \
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
@@ -76,7 +77,7 @@ jobs:
       uses: actions/upload-artifact@v6
       with:
         name: opencc-${{ env.os_short }}-${{ matrix.build_type }}
-        path: opencc/build/*.zip
+        path: opencc/*.zip
 
     - name: Create a Release
       uses: softprops/action-gh-release@v1
@@ -84,4 +85,4 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         tag_name: v1.0
-        files: opencc/build/*.zip
+        files: opencc/*.zip
